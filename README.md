@@ -12,6 +12,10 @@ A command-line tool for intelligent image renaming using local vision models. An
 - Dry-run mode for safe preview before making changes
 - Multiple execution methods: uv/uvx, direct Python
 - Progress tracking and error handling for batch operations
+- **SHA-256 duplicate detection** to skip redundant processing
+- **Optional duplicate deletion** with `--delete-duplicates` flag
+- **Destination directory support** to move renamed files with `--dest`
+- **4-word descriptive filenames** for better image descriptions
 
 ## Installation
 
@@ -57,9 +61,17 @@ python image_renamer.py /path/to/images --dry-run
 ## Example Output
 
 ```
-IMG_1234.jpg → sunset_mountain_landscape.jpg
+IMG_1234.jpg → sunset_mountain_lake_reflection.jpg
 DSC_5678.png → neon_city_night_skyline.png
-photo.webp → abstract_blue_waves.webp
+photo.webp → abstract_blue_flowing_waves.webp
+```
+
+**Duplicate Detection:**
+```
+Found 15 image files
+Calculating checksums to detect duplicates...
+Found 3 duplicate files (will be skipped)
+12 unique images to process
 ```
 
 ## Command Reference
@@ -68,14 +80,16 @@ photo.webp → abstract_blue_waves.webp
 uv run image-renamer [DIRECTORY] [OPTIONS]
 
 Options:
-  --test                  Test model availability
-  --dry-run              Preview changes without renaming
-  --model TEXT           Ollama model [default: llava:latest]
-  --host TEXT            Ollama host URL [default: http://localhost:11434]
-  --max-files INTEGER    Limit number of files to process
-  --concurrent, -c INT   Number of concurrent requests [default: 2]
-  --compare              Compare model performance
-  --help                 Show help message
+  --test                     Test model availability
+  --dry-run                  Preview changes without renaming
+  --model TEXT               Ollama model [default: llava:latest]
+  --host TEXT                Ollama host URL [default: http://localhost:11434]
+  --max-files INTEGER        Limit number of files to process
+  --concurrent, -c INT       Number of concurrent requests [default: 2]
+  --compare                  Compare model performance
+  --dest PATH                Destination directory for renamed files
+  --delete-duplicates        Delete duplicate files instead of skipping
+  --help                     Show help message
 ```
 
 Examples:
@@ -93,6 +107,15 @@ uv run image-renamer ~/Pictures --max-files 10
 # Process with concurrent requests (faster)
 uv run image-renamer ~/Pictures --concurrent 4
 uv run image-renamer ~/Pictures -c 4  # short form
+
+# Move renamed files to destination directory
+uv run image-renamer ~/Pictures --dest ~/Organized
+
+# Delete duplicate files during processing
+uv run image-renamer ~/Pictures --delete-duplicates
+
+# Combine duplicate deletion with destination directory
+uv run image-renamer ~/Pictures --dest ~/Cleaned --delete-duplicates
 
 # Compare models
 uv run image-renamer ~/Pictures --compare
@@ -124,6 +147,12 @@ LLaVA is recommended due to 5x faster processing and higher accuracy.
 - Higher concurrency = faster overall processing but more CPU/memory usage
 - Remote Ollama servers can typically handle higher concurrency
 
+**Duplicate Detection:**
+- SHA-256 checksums calculated before processing to identify duplicates
+- Saves processing time by skipping identical files
+- First occurrence is kept, subsequent duplicates are skipped or deleted
+- Use `--delete-duplicates` to automatically remove duplicate files
+
 ## Output Schema
 
 The tool generates structured JSON output validated with Pydantic:
@@ -134,7 +163,7 @@ class ImageAnalysis(BaseModel):
     style: str                  # "minimalist", "vibrant", "sunset"
     dominant_colors: List[str]  # ["blue", "orange"] (max 3)
     setting: Optional[str]      # "urban", "forest", "space"
-    filename_suggestion: str    # "sunset_mountain_landscape"
+    filename_suggestion: str    # "sunset_mountain_lake_reflection" (4 words)
     confidence: float           # 0.1 to 1.0
 ```
 
@@ -157,9 +186,9 @@ The tool automatically resizes large images (4K→1024px) for analysis while mai
 ```
 src/image_renamer/
 ├── models.py              # Pydantic data models
-├── image_processor.py     # Image resizing & encoding
+├── image_processor.py     # Image resizing, encoding & checksum calculation
 ├── ollama_client.py       # Ollama API abstraction
-├── file_renamer.py        # File operations & naming
+├── file_renamer.py        # File operations, naming & moving
 ├── performance_tracker.py # Metrics & display
 └── cli.py                 # CLI interface & orchestration
 ```
@@ -170,6 +199,8 @@ src/image_renamer/
 - Memory-efficient image processing
 - Batch processing for large directories
 - Conflict-free filename generation
+- SHA-256 duplicate detection
+- Optional file moving to destination directories
 
 ## Requirements
 
