@@ -103,15 +103,17 @@ class ImageRenamerService:
         self,
         target_dir: Path,
         dry_run: bool = False,
-        max_files: Optional[int] = None
+        max_files: Optional[int] = None,
+        concurrent: int = 2
     ) -> Dict[str, int]:
         """
-        Process all images in a directory.
+        Process all images in a directory with concurrent processing.
 
         Args:
             target_dir: Directory containing images
             dry_run: If True, preview changes without renaming
             max_files: Maximum number of files to process
+            concurrent: Number of concurrent requests to process
 
         Returns:
             Dictionary with processing statistics
@@ -133,6 +135,7 @@ class ImageRenamerService:
 
         console.print(f"[green]Found {len(image_files)} image files to process[/green]")
         console.print(f"[blue]Using model: {self.ollama_client.model_name}[/blue]")
+        console.print(f"[blue]Concurrent requests: {concurrent}[/blue]")
 
         stats = {"processed": 0, "skipped": 0, "errors": 0}
 
@@ -143,22 +146,29 @@ class ImageRenamerService:
                 total=len(image_files)
             )
 
-            current_task = progress.add_task(
-                f"[cyan]Processing: {image_files[0].name if image_files else ''}",
-                total=None
-            )
+            # Process images in batches
+            for i in range(0, len(image_files), concurrent):
+                batch = image_files[i:i + concurrent]
 
-            for image_file in image_files:
-                progress.update(current_task, description=f"[cyan]Processing: {image_file.name}")
+                # Create tasks for concurrent processing
+                tasks = [
+                    self.analyze_and_rename_image(image_file, dry_run)
+                    for image_file in batch
+                ]
 
-                result = await self.analyze_and_rename_image(image_file, dry_run)
+                # Wait for all tasks in batch to complete
+                results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                if result:
-                    stats["processed"] += 1
-                else:
-                    stats["skipped"] += 1
+                # Update stats
+                for result in results:
+                    if isinstance(result, Exception):
+                        stats["errors"] += 1
+                    elif result:
+                        stats["processed"] += 1
+                    else:
+                        stats["skipped"] += 1
 
-                progress.advance(overall_task)
+                    progress.advance(overall_task)
 
         return stats
 
@@ -192,6 +202,7 @@ def main(
     model: str = typer.Option(DEFAULT_MODEL, "--model", help="Ollama model to use"),
     host: str = typer.Option(DEFAULT_OLLAMA_HOST, "--host", help="Ollama host URL (e.g., http://192.168.1.100:11434)"),
     max_files: Optional[int] = typer.Option(None, "--max-files", help="Limit number of files to process"),
+    concurrent: int = typer.Option(2, "--concurrent", "-c", help="Number of concurrent requests (default: 2)"),
     compare_models: bool = typer.Option(False, "--compare", help="Compare LLaVA vs Gemma3 performance"),
     test: bool = typer.Option(False, "--test", help="Test model availability")
 ):
@@ -211,7 +222,7 @@ def main(
     if compare_models:
         asyncio.run(compare_model_performance(directory, dry_run, max_files, host))
     else:
-        asyncio.run(process_with_model(directory, model, dry_run, max_files, host))
+        asyncio.run(process_with_model(directory, model, dry_run, max_files, host, concurrent))
 
 
 async def process_with_model(
@@ -219,11 +230,12 @@ async def process_with_model(
     model: str,
     dry_run: bool,
     max_files: Optional[int],
-    ollama_host: str = DEFAULT_OLLAMA_HOST
+    ollama_host: str = DEFAULT_OLLAMA_HOST,
+    concurrent: int = 2
 ):
     """Process images with a single model."""
     service = ImageRenamerService(model, ollama_host)
-    stats = await service.process_directory(directory, dry_run, max_files)
+    stats = await service.process_directory(directory, dry_run, max_files, concurrent)
 
     # Display summary
     console.print(f"\n[bold]Summary[/bold]")

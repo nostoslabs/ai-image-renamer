@@ -28,6 +28,9 @@ uv run image-renamer /path/to/images --host http://192.168.1.100:11434
 
 # Run with specific model
 uv run image-renamer /path/to/images --model gemma3:latest
+
+# Run with concurrent processing (faster)
+uv run image-renamer /path/to/images --concurrent 4
 ```
 
 ## Architecture
@@ -48,7 +51,7 @@ uv run image-renamer /path/to/images --model gemma3:latest
 - Primary: LLaVA (faster, ~4.8s/image)
 - Alternative: Gemma3 (slower, ~25.5s/image, better for abstract content)
 
-**Async Processing**: All image analysis uses async/await for potential concurrent processing
+**Concurrent Processing**: Uses async/await with batch processing. Default is 2 concurrent requests; configurable via `--concurrent` flag. Images are processed in batches using `asyncio.gather()` for parallel API calls.
 
 **Host Flexibility**: The `--host` option allows connecting to remote Ollama instances. All API calls (both `/v1` and `/api/generate` endpoints) use the configurable `ollama_host` parameter.
 

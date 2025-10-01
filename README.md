@@ -73,6 +73,7 @@ Options:
   --model TEXT           Ollama model [default: llava:latest]
   --host TEXT            Ollama host URL [default: http://localhost:11434]
   --max-files INTEGER    Limit number of files to process
+  --concurrent, -c INT   Number of concurrent requests [default: 2]
   --compare              Compare model performance
   --help                 Show help message
 ```
@@ -89,6 +90,10 @@ uv run image-renamer ~/Pictures --dry-run
 # Process with limits
 uv run image-renamer ~/Pictures --max-files 10
 
+# Process with concurrent requests (faster)
+uv run image-renamer ~/Pictures --concurrent 4
+uv run image-renamer ~/Pictures -c 4  # short form
+
 # Compare models
 uv run image-renamer ~/Pictures --compare
 
@@ -97,6 +102,9 @@ uv run image-renamer ~/Pictures --model gemma3:latest
 
 # Use remote Ollama instance
 uv run image-renamer ~/Pictures --host http://192.168.1.100:11434
+
+# Combine options for maximum speed
+uv run image-renamer ~/Pictures --host http://192.168.1.100:11434 --concurrent 5
 ```
 
 ## Performance
@@ -109,6 +117,12 @@ Benchmark results on 4K wallpapers:
 | Gemma3 | 25.5s/image | Good | 85% | Better for abstract content |
 
 LLaVA is recommended due to 5x faster processing and higher accuracy.
+
+**Concurrent Processing:**
+- Default: 2 concurrent requests (safe for most systems)
+- Use `--concurrent 4-5` for faster processing on powerful machines
+- Higher concurrency = faster overall processing but more CPU/memory usage
+- Remote Ollama servers can typically handle higher concurrency
 
 ## Output Schema
 
