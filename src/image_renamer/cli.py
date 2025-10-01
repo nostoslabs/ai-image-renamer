@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 
 import typer
 from rich.console import Console
-from rich.progress import Progress
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn, MofNCompleteColumn, TimeElapsedColumn
 
 from .file_renamer import DirectoryNotFoundError, FileRenamer
 from .image_processor import ImageProcessor, ImageProcessingError
@@ -104,6 +104,29 @@ class ImageRenamerService:
             console.print(f"[red]Error processing {image_path.name}: {e}[/red]")
             self.tracker.record_error()
             return None
+
+    @staticmethod
+    def _format_eta(seconds: float) -> str:
+        """Format ETA in human-readable format."""
+        if seconds < 60:
+            return f"{int(seconds)}s"
+        elif seconds < 3600:
+            minutes = int(seconds / 60)
+            secs = int(seconds % 60)
+            return f"{minutes}m {secs}s"
+        else:
+            hours = int(seconds / 3600)
+            minutes = int((seconds % 3600) / 60)
+            return f"{hours}h {minutes}m"
+
+    @staticmethod
+    def _format_rate(rate: float, elapsed: float, completed: int) -> str:
+        """Format processing rate (img/s or s/img)."""
+        if rate >= 1.0:
+            return f"{rate:.2f} img/s"
+        else:
+            seconds_per_image = elapsed / completed
+            return f"{seconds_per_image:.2f} s/img"
 
     def _find_unique_images(
         self,
@@ -224,11 +247,27 @@ class ImageRenamerService:
         stats = {"processed": 0, "skipped": 0, "errors": 0, "duplicates": duplicate_count, "deleted": deleted_count}
 
         # Process images with progress bar
-        with Progress() as progress:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TextColumn("•"),
+            TimeElapsedColumn(),
+            TextColumn("•"),
+            TextColumn("[yellow]ETA: {task.fields[eta]}"),
+            TextColumn("•"),
+            TextColumn("[cyan]{task.fields[rate]}"),
+            console=console
+        ) as progress:
             overall_task = progress.add_task(
-                "[green]Overall progress",
-                total=len(unique_files)
+                "[green]Processing images",
+                total=len(unique_files),
+                rate="--",
+                eta="--"
             )
+
+            start_time = time.time()
 
             # Process images in batches
             for i in range(0, len(unique_files), concurrent):
@@ -243,7 +282,8 @@ class ImageRenamerService:
                 # Wait for all tasks in batch to complete
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                # Update stats
+                # Update stats and count completed in batch
+                batch_completed = 0
                 for result in results:
                     if isinstance(result, Exception):
                         stats["errors"] += 1
@@ -251,8 +291,23 @@ class ImageRenamerService:
                         stats["processed"] += 1
                     else:
                         stats["skipped"] += 1
+                    batch_completed += 1
 
-                    progress.advance(overall_task)
+                # Advance progress by batch size (more efficient and better for ETA calculation)
+                progress.advance(overall_task, batch_completed)
+
+                # Update rate and ETA
+                elapsed = time.time() - start_time
+                completed = stats["processed"] + stats["skipped"] + stats["errors"]
+                if elapsed > 0 and completed > 0:
+                    rate = completed / elapsed
+                    remaining = len(unique_files) - completed
+                    eta_seconds = remaining / rate
+
+                    eta_str = self._format_eta(eta_seconds)
+                    rate_str = self._format_rate(rate, elapsed, completed)
+
+                    progress.update(overall_task, rate=rate_str, eta=eta_str)
 
         return stats
 
