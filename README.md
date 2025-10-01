@@ -71,6 +71,7 @@ Options:
   --test                  Test model availability
   --dry-run              Preview changes without renaming
   --model TEXT           Ollama model [default: llava:latest]
+  --host TEXT            Ollama host URL [default: http://localhost:11434]
   --max-files INTEGER    Limit number of files to process
   --compare              Compare model performance
   --help                 Show help message
@@ -93,6 +94,9 @@ uv run image-renamer ~/Pictures --compare
 
 # Use alternative model
 uv run image-renamer ~/Pictures --model gemma3:latest
+
+# Use remote Ollama instance
+uv run image-renamer ~/Pictures --host http://192.168.1.100:11434
 ```
 
 ## Performance
@@ -129,10 +133,22 @@ The tool automatically resizes large images (4K→1024px) for analysis while mai
 ## Technical Details
 
 **Architecture:**
+- Modular design following SOLID principles
 - Pydantic AI with direct Ollama integration
 - JSON schema validation for structured outputs
 - Async processing with progress tracking
 - Type-safe validation and error handling
+
+**Module Structure:**
+```
+src/image_renamer/
+├── models.py              # Pydantic data models
+├── image_processor.py     # Image resizing & encoding
+├── ollama_client.py       # Ollama API abstraction
+├── file_renamer.py        # File operations & naming
+├── performance_tracker.py # Metrics & display
+└── cli.py                 # CLI interface & orchestration
+```
 
 **Features:**
 - Metrics tracking (success rates, timing, confidence)
@@ -158,6 +174,12 @@ Custom model configuration:
 ```bash
 # Use specific model versions
 uv run image-renamer ~/Pictures --model llava:13b
+
+# Connect to remote Ollama server
+uv run image-renamer ~/Pictures --host http://192.168.1.100:11434
+
+# Use remote with custom model
+uv run image-renamer ~/Pictures --host http://myserver:11434 --model llava:13b
 
 # Batch processing with system tools
 find ~/Pictures -name "*.jpg" -type f | head -20 | \

@@ -34,7 +34,7 @@ console = Console()
 SUPPORTED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif'}
 
 # Ollama configuration
-OLLAMA_BASE_URL = "http://localhost:11434/v1"
+DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 DEFAULT_MODEL = "llava:latest"
 ALTERNATIVE_MODEL = "gemma3:latest"
 
@@ -91,8 +91,9 @@ class ModelPerformance(BaseModel):
 class ImageRenamer:
     """Main class for AI-powered image renaming with structured outputs."""
 
-    def __init__(self, model_name: str = DEFAULT_MODEL):
+    def __init__(self, model_name: str = DEFAULT_MODEL, ollama_host: str = DEFAULT_OLLAMA_HOST):
         self.model_name = model_name
+        self.ollama_host = ollama_host.rstrip('/')  # Remove trailing slash if present
         self.performance = ModelPerformance(model_name=model_name)
         self.agent = self._create_agent()
 
@@ -101,7 +102,7 @@ class ImageRenamer:
 
         model = OpenAIChatModel(
             model_name=self.model_name,
-            provider=OllamaProvider(base_url=OLLAMA_BASE_URL),
+            provider=OllamaProvider(base_url=f"{self.ollama_host}/v1"),
         )
 
         # Create agent with structured output
@@ -212,7 +213,7 @@ Respond with valid JSON matching the required schema."""
             }
 
             response = requests.post(
-                "http://localhost:11434/api/generate",
+                f"{self.ollama_host}/api/generate",
                 json=payload,
                 timeout=60
             )
@@ -335,13 +336,20 @@ Respond with valid JSON matching the required schema."""
 
         # Process images with progress bar
         with Progress() as progress:
-            task = progress.add_task(
-                f"[cyan]Analyzing images with {self.model_name}...",
+            # Overall progress bar
+            overall_task = progress.add_task(
+                f"[green]Overall progress",
                 total=len(image_files)
             )
 
-            for image_file in image_files:
-                progress.update(task, description=f"[cyan]Processing: {image_file.name}")
+            # Current file progress bar (scrolling)
+            current_task = progress.add_task(
+                f"[cyan]Processing: {image_files[0].name if image_files else ''}",
+                total=None
+            )
+
+            for idx, image_file in enumerate(image_files):
+                progress.update(current_task, description=f"[cyan]Processing: {image_file.name}")
 
                 try:
                     # Analyze image
@@ -378,7 +386,7 @@ Respond with valid JSON matching the required schema."""
                     console.print(f"[red]  ❌ Error processing {image_file.name}: {e}[/red]")
                     stats["errors"] += 1
 
-                progress.advance(task)
+                progress.advance(overall_task)
 
         return stats
 
@@ -436,6 +444,7 @@ def main(
     directory: Optional[Path] = typer.Argument(None, help="Target directory containing images"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without renaming"),
     model: str = typer.Option(DEFAULT_MODEL, "--model", help="Ollama model to use"),
+    host: str = typer.Option(DEFAULT_OLLAMA_HOST, "--host", help="Ollama host URL (e.g., http://192.168.1.100:11434)"),
     max_files: Optional[int] = typer.Option(None, "--max-files", help="Limit number of files to process"),
     compare_models: bool = typer.Option(False, "--compare", help="Compare LLaVA vs Gemma3 performance"),
     test: bool = typer.Option(False, "--test", help="Test model availability")
@@ -456,7 +465,7 @@ def main(
                     console.print(f"Testing {model}...")
 
                     try:
-                        renamer = ImageRenamer(model)
+                        renamer = ImageRenamer(model, host)
                         console.print(f"  ✅ {model} initialized successfully")
 
                     except Exception as e:
@@ -475,9 +484,9 @@ def main(
     console.print("[bold green]🎨 AI Image Renamer with Structured Outputs[/bold green]\n")
 
     if compare_models:
-        asyncio.run(compare_model_performance(directory, dry_run, max_files))
+        asyncio.run(compare_model_performance(directory, dry_run, max_files, host))
     else:
-        asyncio.run(process_with_model(directory, model, dry_run, max_files))
+        asyncio.run(process_with_model(directory, model, dry_run, max_files, host))
 
 
 if __name__ == "__main__":
@@ -490,11 +499,12 @@ async def process_with_model(
     directory: Path,
     model: str,
     dry_run: bool,
-    max_files: Optional[int]
+    max_files: Optional[int],
+    ollama_host: str = DEFAULT_OLLAMA_HOST
 ):
     """Process images with a single model."""
 
-    renamer = ImageRenamer(model)
+    renamer = ImageRenamer(model, ollama_host)
 
     stats = await renamer.process_directory(directory, dry_run, max_files)
 
@@ -510,7 +520,8 @@ async def process_with_model(
 async def compare_model_performance(
     directory: Path,
     dry_run: bool,
-    max_files: Optional[int]
+    max_files: Optional[int],
+    ollama_host: str = DEFAULT_OLLAMA_HOST
 ):
     """Compare performance between LLaVA and Gemma3 models."""
 
@@ -525,7 +536,7 @@ async def compare_model_performance(
     for model in models_to_test:
         console.print(f"\n[bold]Testing {model}[/bold]")
 
-        renamer = ImageRenamer(model)
+        renamer = ImageRenamer(model, ollama_host)
 
         start_time = time.time()
         stats = await renamer.process_directory(directory, True, test_limit)  # Always dry run for comparison

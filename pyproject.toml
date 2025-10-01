@@ -33,7 +33,7 @@ dependencies = [
 ]
 
 [project.scripts]
-image-renamer = "image_renamer:app"
+image-renamer = "image_renamer.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/yourusername/image-renamer"
