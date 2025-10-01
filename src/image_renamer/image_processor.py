@@ -1,6 +1,7 @@
 """Image processing utilities for resizing and encoding."""
 
 import base64
+import hashlib
 import io
 from pathlib import Path
 from typing import Optional
@@ -13,6 +14,24 @@ MAX_SIZE = 1024  # Resize images to max 1024px for analysis
 
 class ImageProcessor:
     """Handles image resizing and base64 encoding."""
+
+    @staticmethod
+    def calculate_checksum(image_path: Path) -> str:
+        """
+        Calculate SHA-256 checksum of an image file.
+
+        Args:
+            image_path: Path to the image file
+
+        Returns:
+            Hexadecimal SHA-256 checksum string
+        """
+        sha256 = hashlib.sha256()
+        with open(image_path, 'rb') as f:
+            # Read file in chunks to handle large images efficiently
+            for chunk in iter(lambda: f.read(8192), b''):
+                sha256.update(chunk)
+        return sha256.hexdigest()
 
     @staticmethod
     def resize_and_encode(image_path: Path, max_size: int = MAX_SIZE) -> Optional[str]:

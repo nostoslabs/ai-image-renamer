@@ -64,14 +64,15 @@ class FileRenamer:
             counter += 1
 
     @staticmethod
-    def rename_file(old_path: Path, new_path: Path, dry_run: bool = False) -> bool:
+    def rename_file(old_path: Path, new_path: Path, dry_run: bool = False, move_to_dest: bool = False) -> bool:
         """
-        Rename a file with dry-run support.
+        Rename a file with dry-run support and optional move to destination.
 
         Args:
             old_path: Current file path
             new_path: New file path
             dry_run: If True, don't actually rename the file
+            move_to_dest: If True, move the file instead of renaming in place
 
         Returns:
             True if rename was successful (or would be in dry-run mode)
@@ -80,7 +81,14 @@ class FileRenamer:
             return True
 
         try:
-            old_path.rename(new_path)
+            if move_to_dest:
+                # Ensure destination directory exists
+                new_path.parent.mkdir(parents=True, exist_ok=True)
+                # Move file to destination
+                old_path.rename(new_path)
+            else:
+                # Rename in place
+                old_path.rename(new_path)
             return True
         except Exception as e:
             raise FileRenamingError(f"Failed to rename {old_path} to {new_path}: {e}") from e

@@ -23,11 +23,11 @@ Analyze the image focusing on:
 5. Generate a filename that captures the essence
 
 Guidelines for filename_suggestion:
-- Use underscores instead of spaces
+- Use exactly 4 words separated by underscores
 - Lowercase only
 - Maximum 40 characters
-- Be descriptive but concise
-- Examples: "neon_city_night", "abstract_blue_waves", "mountain_sunset_reflection"
+- Be descriptive and capture key visual elements
+- Examples: "neon_city_night_skyline", "abstract_blue_flowing_waves", "mountain_sunset_lake_reflection"
 
 Provide a confidence score based on how clear and distinctive the image features are.
 
